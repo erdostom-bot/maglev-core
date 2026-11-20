@@ -74,6 +74,47 @@ RSpec.describe 'Maglev::PublishedPagePreviewController', type: :request do
       end
     end
 
+    describe 'Given a client sends a wildcard or no Accept header (link previews, curl...)' do
+      # rubocop:disable Style/StringHashKeys
+      it 'renders the page for Slackbot sending Accept */*' do
+        get '/index', headers: { 'HTTP_ACCEPT' => '*/*', 'HTTP_USER_AGENT' => 'Slackbot-LinkExpanding 1.0' }
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include('<title>Default - Home</title>')
+      end
+
+      it 'renders the page for an unknown client sending Accept */*' do
+        get '/', headers: { 'HTTP_ACCEPT' => '*/*', 'HTTP_USER_AGENT' => 'curl/8.5.0' }
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include('<title>Default - Home</title>')
+      end
+
+      it 'renders the page when */* is one of several accepted types' do
+        get '/index', headers: { 'HTTP_ACCEPT' => 'application/signed-exchange;v=b3, */*;q=0.8',
+                                 'HTTP_USER_AGENT' => 'SomePreviewBot/1.0' }
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include('<title>Default - Home</title>')
+      end
+
+      it 'renders the page without any Accept header' do
+        get '/index', headers: { 'HTTP_ACCEPT' => nil, 'HTTP_USER_AGENT' => 'WhatsApp/2.23' }
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include('<title>Default - Home</title>')
+      end
+
+      it 'does not route a JSON request' do
+        expect do
+          get '/index', headers: { 'HTTP_ACCEPT' => 'application/json', 'HTTP_USER_AGENT' => 'curl/8.5.0' }
+        end.to raise_error(ActionController::RoutingError)
+      end
+
+      it 'does not route an asset-like path' do
+        expect do
+          get '/missing.png', headers: { 'HTTP_ACCEPT' => '*/*', 'HTTP_USER_AGENT' => 'Slackbot-LinkExpanding 1.0' }
+        end.to raise_error(ActionController::RoutingError)
+      end
+      # rubocop:enable Style/StringHashKeys
+    end
+
     context 'rendering a page from its old path' do
       before do
         page = create(:page, title: 'Contact us', path: 'contact')
